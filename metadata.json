@@ -1,0 +1,6 @@
+{
+  "name": "LedgerAi",
+  "description": "Automate receipt and invoice bookkeeping. Structure amount, vendor, category, and date via Gemini AI. Supports manual paste, batch uploads (images/PDFs), and ERP/Salesforce/SAP integrations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
