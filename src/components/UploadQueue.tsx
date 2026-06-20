@@ -246,7 +246,7 @@ export default function UploadQueue({
           <span className="text-[10px] bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full text-indigo-700 font-bold font-sans">LedgerAi Ingest</span>
         </div>
         <p className="text-xs text-slate-500 mb-4">
-          Upload multi-format bills, receipts or drop CSV files below. Gemini handles visual OCR and data mapping automatically.
+          Upload multi-format bills, receipts, Excel spreadsheets, Word files, or drop CSV files. Gemini handles data mapping and content extraction automatically.
         </p>
 
         {/* Drag and Drop Zone */}
@@ -264,7 +264,7 @@ export default function UploadQueue({
               ref={fileInputRef}
               onChange={handleFileChange}
               multiple
-              accept="image/*,application/pdf,.csv"
+              accept="image/*,application/pdf,.csv,.xlsx,.xls,.docx,.doc"
               className="hidden"
             />
             <div className="p-3 bg-white border border-slate-100 group-hover:border-indigo-200 shadow-xs rounded-xl text-slate-600 group-hover:text-indigo-650 group-hover:scale-105 transition-all duration-300">
@@ -272,7 +272,7 @@ export default function UploadQueue({
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-800 group-hover:text-indigo-950 transition-colors">Drag & drop files or click to upload</p>
-              <p className="text-[10px] text-slate-400 mt-1">PNG, JPG, PDF (Gemini Intelligence) or bulk CSV</p>
+              <p className="text-[10px] text-slate-400 mt-1">Images, PDFs, Excel (.xlsx/.xls), Word Word/Work Documents (.docx/.doc) or bulk CSV</p>
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-export type SourceType = 'manual' | 'paste' | 'image' | 'pdf' | 'csv';
+export type SourceType = 'manual' | 'paste' | 'image' | 'pdf' | 'csv' | 'excel' | 'word';
 export type VerificationStatus = 'pending_review' | 'verified';
 
 export interface LineItem {
@@ -64,7 +64,7 @@ export interface SharedInboxFile {
   id: string;
   name: string;
   size: string;
-  type: 'image/png' | 'image/jpeg' | 'application/pdf';
+  type: 'image/png' | 'image/jpeg' | 'application/pdf' | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   source: 'Slack Finance Channel' | 'Email Inbox' | 'Shared Drive Ingestion';
   receivedAt: string;
   parsed: boolean;

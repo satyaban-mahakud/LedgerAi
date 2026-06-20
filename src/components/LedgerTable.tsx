@@ -88,7 +88,7 @@ export default function LedgerTable({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Neha_Finance_Ledger_Extract_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `Finance_Ledger_Extract_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -102,6 +102,10 @@ export default function LedgerTable({
         return <span className="flex items-center text-[10px] text-red-600 font-semibold bg-red-50 border border-red-100 px-2 py-0.5 rounded-full"><FileText className="w-3 h-3 mr-1" /> PDF Invoice</span>;
       case "csv":
         return <span className="flex items-center text-[10px] text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full"><FileSpreadsheet className="w-3 h-3 mr-1" /> Raw CSV</span>;
+      case "excel":
+        return <span className="flex items-center text-[10px] text-teal-750 font-semibold bg-teal-50 border border-teal-150 px-2 py-0.5 rounded-full"><FileSpreadsheet className="w-3 h-3 mr-1 text-teal-600" /> Excel Ingest</span>;
+      case "word":
+        return <span className="flex items-center text-[10px] text-indigo-700 font-semibold bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full"><FileText className="w-3 h-3 mr-1 text-indigo-600" /> Word Ingest</span>;
       default:
         return <span className="flex items-center text-[10px] text-slate-600 font-semibold bg-slate-55 border border-slate-100 px-2 py-0.5 rounded-full">Pasted Text</span>;
     }
@@ -113,7 +117,7 @@ export default function LedgerTable({
       <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-100 gap-3">
         <div>
           <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Bookkeeping Running Ledger</h4>
-          <p className="text-xs text-slate-500 font-mono">Neha's month-end database of structured finance metadata</p>
+          <p className="text-xs text-slate-500 font-mono">Month-end database of structured finance metadata</p>
         </div>
         
         {/* Export to spreadsheet option */}
@@ -175,6 +179,8 @@ export default function LedgerTable({
             <option value="pdf">PDF Uploads</option>
             <option value="image">Image Uploads</option>
             <option value="csv">Bulk CSV Mapping</option>
+            <option value="excel">Excel Spreadsheets</option>
+            <option value="word">Word Documents</option>
             <option value="paste">Manual & pasted text</option>
           </select>
         </div>

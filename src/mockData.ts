@@ -200,6 +200,24 @@ export const MOCK_SHARED_INBOX_FILES: SharedInboxFile[] = [
     source: "Slack Finance Channel",
     receivedAt: "2026-06-20T07:44:00Z",
     parsed: false
+  },
+  {
+    id: "sh_6",
+    name: "Amazon_Office_Supplies_Spreadsheet.xlsx",
+    size: "45 KB",
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    source: "Shared Drive Ingestion",
+    receivedAt: "2026-06-20T06:12:00Z",
+    parsed: false
+  },
+  {
+    id: "sh_7",
+    name: "Consulting_Engagement_Brief_SOW.docx",
+    size: "128 KB",
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    source: "Email Inbox",
+    receivedAt: "2026-06-20T05:30:00Z",
+    parsed: false
   }
 ];
 
@@ -223,7 +241,7 @@ Category: Business Trip to HQ`
 500 Howard Street, San Francisco, CA 94105
 INVOICE #INV-88712
 Invoice Date: June 1, 2026
-Bill To: Neha's Team (Finance Dept)
+Bill To: (Finance Dept)
 ---------------------------------------------
 Subscription: Standard Plan Annual Billing
 Quantity: 12 Seats @ $96.00/Seat

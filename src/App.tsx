@@ -27,6 +27,8 @@ import {
   FileText, 
   Sliders 
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import mammoth from "mammoth";
 
 const INITIAL_CONFIG: IntegrationConfig = {
   sapUrl: "https://sap-gateway.internal.acme.com/sap/opu/odata/s4",
@@ -36,6 +38,51 @@ const INITIAL_CONFIG: IntegrationConfig = {
   sfAccountId: "ACC_880199KA48",
   erpEndpoint: "https://123456.restlets.api.netsuite.com/app/site/hosting/restlet.nl",
   erpTenantId: "TENANT_90003"
+};
+
+// Excel Sheet Extractor
+const readExcelFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const u8 = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(u8, { type: "array" });
+        let textResult = "";
+        
+        workbook.SheetNames.forEach((sheetName) => {
+          textResult += `--- Excel Sheet: ${sheetName} ---\n`;
+          const worksheet = workbook.Sheets[sheetName];
+          const csvText = XLSX.utils.sheet_to_csv(worksheet);
+          textResult += csvText + "\n\n";
+        });
+        
+        resolve(textResult);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+// Word Document Extractor
+const readWordFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const arrayBuffer = e.target?.result as ArrayBuffer;
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        resolve(result.value || "");
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
+  });
 };
 
 export default function App() {
@@ -85,40 +132,54 @@ export default function App() {
       if (file.name.endsWith(".csv")) continue; // Handled separately by mapping modal in UploadQueue
       
       const queueId = `queue_${Date.now()}_${Math.random().toString(36).substring(3, 8)}`;
-      
+      const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+      const isWord = file.name.endsWith(".docx") || file.name.endsWith(".doc");
+
       // Seed processing item in queue
       const newItem: ProcessingItem = {
         id: queueId,
         name: file.name,
         size: file.size,
-        type: file.type || "application/pdf",
+        type: file.type || (isExcel ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : isWord ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf"),
         progress: 10,
-        status: "uploading"
+        status: isExcel || isWord ? "parsing" : "uploading"
       };
       setProcessingQueue(prev => [newItem, ...prev]);
 
-      // Base64 file mapping
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const rawBase = e.target?.result as string;
-          const base64Data = rawBase.split(",")[1];
-          const mimeType = file.type || (file.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+      try {
+        let textExtracted = "";
+        let finalSourceType: SourceType = "pdf";
 
-          // Advance queue status state
+        if (isExcel) {
+          finalSourceType = "excel";
+          // Advance parsing state
           setProcessingQueue(prev => prev.map(item => 
-            item.id === queueId ? { ...item, progress: 45, status: "structuring" } : item
+            item.id === queueId ? { ...item, progress: 30, status: "parsing" } : item
+          ));
+          textExtracted = await readExcelFile(file);
+        } else if (isWord) {
+          finalSourceType = "word";
+          // Advance parsing state
+          setProcessingQueue(prev => prev.map(item => 
+            item.id === queueId ? { ...item, progress: 30, status: "parsing" } : item
+          ));
+          textExtracted = await readWordFile(file);
+        }
+
+        if (isExcel || isWord) {
+          // Send to Gemini as text content extracted from document
+          setProcessingQueue(prev => prev.map(item => 
+            item.id === queueId ? { ...item, progress: 60, status: "structuring" } : item
           ));
 
-          // Run extraction API
           const res = await fetch("/api/extract", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              text: textExtracted,
               file: {
-                data: base64Data,
-                mimeType,
-                name: file.name
+                name: file.name,
+                mimeType: "text/plain"
               }
             })
           });
@@ -135,38 +196,100 @@ export default function App() {
             item.id === queueId ? { ...item, progress: 100, status: "completed", result: ocrResult } : item
           ));
 
-          // Map extraction results into pending ledger audit ledger
           const addedItem: Receipt = {
             id: `rec_${Date.now()}_${Math.random().toString(36).substring(3, 8)}`,
             amount: ocrResult.amount || 0.00,
             currency: ocrResult.currency || "USD",
-            vendor: ocrResult.vendor || "Recognized Vendor",
+            vendor: ocrResult.vendor || "Structured Document Vendor",
             category: ocrResult.category || "Miscellaneous",
             date: ocrResult.date || new Date().toISOString().split("T")[0],
             taxAmount: ocrResult.taxAmount || 0.00,
-            summary: ocrResult.summary || "AI Extracted Expense",
+            summary: ocrResult.summary || `${isExcel ? "Spreadsheet" : "Document"} extracted transaction`,
             lineItems: ocrResult.lineItems || [],
-            confidence: ocrResult.confidence || 0.85,
-            sourceType: mimeType.includes("pdf") ? "pdf" : "image",
+            confidence: ocrResult.confidence || 0.88,
+            sourceType: finalSourceType,
             sourceName: file.name,
             createdAt: new Date().toISOString(),
-            status: "pending_review" // Needs Neha's approval audit
+            status: "pending_review"
           };
 
           setReceipts(prev => [addedItem, ...prev]);
 
-        } catch (error: any) {
-          console.error("AI Extractor failure:", error);
-          setProcessingQueue(prev => prev.map(item => 
-            item.id === queueId ? { ...item, progress: 100, status: "failed", error: error.message } : item
-          ));
+        } else {
+          // Standard Image/PDF direct payload ingestion flow (existing logic)
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const rawBase = e.target?.result as string;
+              const base64Data = rawBase.split(",")[1];
+              const mimeType = file.type || (file.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+
+              setProcessingQueue(prev => prev.map(item => 
+                item.id === queueId ? { ...item, progress: 45, status: "structuring" } : item
+              ));
+
+              const res = await fetch("/api/extract", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  file: {
+                    data: base64Data,
+                    mimeType,
+                    name: file.name
+                  }
+                })
+              });
+
+              const json = await res.json();
+              if (!json.success || !json.data) {
+                throw new Error(json.error || "Gemini engine returned extraction error");
+              }
+
+              const ocrResult = json.data;
+
+              setProcessingQueue(prev => prev.map(item => 
+                item.id === queueId ? { ...item, progress: 100, status: "completed", result: ocrResult } : item
+              ));
+
+              const addedItem: Receipt = {
+                id: `rec_${Date.now()}_${Math.random().toString(36).substring(3, 8)}`,
+                amount: ocrResult.amount || 0.00,
+                currency: ocrResult.currency || "USD",
+                vendor: ocrResult.vendor || "Recognized Vendor",
+                category: ocrResult.category || "Miscellaneous",
+                date: ocrResult.date || new Date().toISOString().split("T")[0],
+                taxAmount: ocrResult.taxAmount || 0.00,
+                summary: ocrResult.summary || "AI Extracted Expense",
+                lineItems: ocrResult.lineItems || [],
+                confidence: ocrResult.confidence || 0.85,
+                sourceType: mimeType.includes("pdf") ? "pdf" : "image",
+                sourceName: file.name,
+                createdAt: new Date().toISOString(),
+                status: "pending_review"
+              };
+
+              setReceipts(prev => [addedItem, ...prev]);
+
+            } catch (innerError: any) {
+              console.error("Image/PDF Extractor failure:", innerError);
+              setProcessingQueue(prev => prev.map(item => 
+                item.id === queueId ? { ...item, progress: 100, status: "failed", error: innerError.message } : item
+              ));
+            }
+          };
+          reader.readAsDataURL(file);
         }
-      };
-      reader.readAsDataURL(file);
+
+      } catch (err: any) {
+        console.error("Unified Extractor failure:", err);
+        setProcessingQueue(prev => prev.map(item => 
+          item.id === queueId ? { ...item, progress: 100, status: "failed", error: err.message } : item
+        ));
+      }
     }
   };
 
-  // Extract raw text logs pasted by Neha directly
+  // Extract raw text logs pasted directly
   const handleExtractPastedText = async (text: string) => {
     const queueId = `queue_paste_${Date.now()}`;
     const newItem: ProcessingItem = {
@@ -235,10 +358,25 @@ export default function App() {
       matchText = RAW_RECEIPT_TEXT_EXAMPLES.find(ex => ex.title.includes("Starbucks"))?.text || matchText;
     } else if (file.name.includes("Uber_Ride")) {
       matchText = RAW_RECEIPT_TEXT_EXAMPLES.find(ex => ex.title.includes("Uber"))?.text || matchText;
+    } else if (file.name.includes("Amazon_Office_Supplies_Spreadsheet")) {
+      matchText = `--- Custom Excel Sheet: Q2 Office Expenses ---
+Date,Vendor,Category,Amount,Tax,Details
+2026-06-18,Staples Business Depot,Office Supplies,415.50,33.24,Premium conference chair + stationary supplies
+`;
     } else if (file.name.includes("Amazon") || file.name.includes("Figma")) {
       matchText = `Figma Inc.\nINV-993\nDate: June 20, 2026\nQuantity: 3 seats Pro Pro annual\nAmount: $450.00\nCategory: Design Software licensing`;
     } else if (file.name.includes("Marketing_Dinner")) {
-      matchText = `The Capital Grille, NY\nDate: June 20, 2026\nFood & Wine totals: $289.40 USD\nTip: $40.00\nTotal Charge: $329.40\nClient Dinner - Neha marketing sync`;
+      matchText = `The Capital Grille, NY\nDate: June 20, 2026\nFood & Wine totals: $289.40 USD\nTip: $40.00\nTotal Charge: $329.40\nClient Dinner - marketing sync`;
+    } else if (file.name.includes("SOW")) {
+      matchText = `STATEMENT OF WORK & SERVICES AGREEMENT
+Date of Agreement: June 20, 2026
+Vendor Name: DevsOnDemand Ltd.
+Category: Professional Services
+Service description: Agile software consulting & frontend engineering support (20 hours)
+Billable Amount: $1,600.00 USD
+Sales tax rate: 0.00%
+Authorized Signature: Jane Doe
+`;
     }
 
     const queueId = `queue_inbox_${file.id}_${Date.now()}`;
@@ -280,7 +418,13 @@ export default function App() {
         summary: result.summary || `Extracted from ${file.source}`,
         lineItems: result.lineItems || [],
         confidence: result.confidence || 0.95,
-        sourceType: file.type.includes("pdf") ? "pdf" : "image",
+        sourceType: file.type.includes("pdf") 
+          ? "pdf" 
+          : file.type.includes("sheet") 
+            ? "excel" 
+            : file.type.includes("document") 
+              ? "word" 
+              : "image",
         sourceName: file.name,
         createdAt: new Date().toISOString(),
         status: "pending_review"
@@ -351,12 +495,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-slate-900 flex flex-col font-sans">
-      {/* Prime Header Accent Bar */}
-      <div className="bg-slate-950 py-1.5 text-center text-[10px] text-slate-300 font-mono tracking-widest uppercase flex items-center justify-center space-x-1.5 selection:bg-slate-700 selection:text-white">
-        <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-        <span>LedgerAi Bookkeeping Engine • Core Node Connected • Gemini-3.5-Flash Ingest</span>
-      </div>
-
       {/* Main Corporate Navigation/App Header Banner */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 py-4 px-6 sticky top-0 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -372,7 +510,7 @@ export default function App() {
                     Pro Ingest
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium">Month-End Bookkeeping Automation Workspace for Neha</p>
+                <p className="text-xs text-slate-500 font-medium">Month-End Bookkeeping Automation</p>
               </div>
             </div>
           </div>
